@@ -233,41 +233,130 @@ HTML_TEMPLATE = """
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Deadlock Toolkit</title>
+    <title>Deadlock Prevention Toolkit</title>
     <script src="https://unpkg.com/cytoscape@3.24.0/dist/cytoscape.min.js"></script>
     <style>
-      body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-      #cy { width: 100%; height: 70vh; display: block; border-bottom: 1px solid #ddd; }
-      #controls { padding: 12px; }
-      input, button, select { margin: 4px; }
-      pre { background: #f7f7f7; padding: 8px; }
+      body {
+        font-family: 'Segoe UI', Arial, sans-serif;
+        margin: 0;
+        background: #f4f6f9;
+        color: #333;
+      }
+      header {
+        background: linear-gradient(90deg, #4f46e5, #6366f1);
+        color: white;
+        padding: 15px 25px;
+        font-size: 1.4rem;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+      }
+      #cy {
+        width: 100%;
+        height: 65vh;
+        display: block;
+        border-bottom: 2px solid #e5e7eb;
+        background: white;
+        border-radius: 0 0 12px 12px;
+      }
+      #controls {
+        padding: 20px;
+        background: white;
+        box-shadow: 0px 2px 8px rgba(0,0,0,0.05);
+        border-radius: 12px;
+        margin: 20px;
+      }
+      input, button {
+        padding: 8px 10px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        margin: 4px;
+        font-size: 0.9rem;
+      }
+      button {
+        background: #4f46e5;
+        color: white;
+        border: none;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      button:hover {
+        background: #4338ca;
+      }
+      pre {
+        background: #f9fafb;
+        padding: 10px;
+        border-radius: 8px;
+        overflow-x: auto;
+        margin-top: 10px;
+        font-size: 0.85rem;
+      }
+      #log {
+        margin-top: 10px;
+        color: #1f2937;
+      }
     </style>
   </head>
   <body>
+    <header>💻 Deadlock Prevention & Detection Toolkit</header>
     <div id="cy"></div>
+
     <div id="controls">
-      <strong>Quick actions:</strong>
-      <input id="pid" placeholder="Process id (e.g. P1)" />
-      <input id="rid" placeholder="Resource id (e.g. R1)" />
-      <input id="count" placeholder="count" style="width:60px" />
+      <div style="margin-bottom:10px;">
+        <strong>🔧 Quick actions:</strong>
+      </div>
+      <input id="pid" placeholder="Process ID (e.g. P1)" />
+      <input id="rid" placeholder="Resource ID (e.g. R1)" />
+      <input id="count" placeholder="Count" style="width:80px" />
+
       <button onclick="addProcess()">Add Process</button>
       <button onclick="addResource()">Add Resource</button>
       <button onclick="req()">Request</button>
       <button onclick="rel()">Release</button>
       <button onclick="detect()">Detect Deadlocks</button>
-      <button onclick="bankerCheck()">Banker Check (propose)</button>
+      <button onclick="bankerCheck()">Banker Check</button>
       <button onclick="demoCycle()">Load Deadlock Demo</button>
-      <div id="log"></div>
+
+      <pre id="log"></pre>
     </div>
 
     <script>
-      let cy = cytoscape({ container: document.getElementById('cy'), elements: [], style: [
-        { selector: 'node[type="process"]', style: { 'shape': 'roundrectangle', 'background-color': '#66ccff', 'label': 'data(label)' } },
-        { selector: 'node[type="resource"]', style: { 'shape': 'ellipse', 'background-color': '#ffcc66', 'label': 'data(label)' } },
-        { selector: 'edge', style: { 'width': 3, 'line-color': '#ccc', 'target-arrow-color': '#ccc', 'target-arrow-shape': 'triangle' } },
-        { selector: '.cycle', style: { 'line-color': '#ff4444', 'target-arrow-color': '#ff4444' } },
-        { selector: '.danger', style: { 'background-color': '#ff4444' } }
-      ], layout: { name: 'cose' } });
+      let cy = cytoscape({
+        container: document.getElementById('cy'),
+        elements: [],
+        style: [
+          { selector: 'node[type="process"]', style: {
+              'shape': 'roundrectangle',
+              'background-color': '#60a5fa',
+              'label': 'data(label)',
+              'color': '#fff',
+              'text-valign': 'center',
+              'font-size': '14px',
+              'width': '70px',
+              'height': '40px'
+          }},
+          { selector: 'node[type="resource"]', style: {
+              'shape': 'ellipse',
+              'background-color': '#facc15',
+              'label': 'data(label)',
+              'color': '#111',
+              'font-size': '13px'
+          }},
+          { selector: 'edge', style: {
+              'width': 3,
+              'line-color': '#9ca3af',
+              'target-arrow-color': '#9ca3af',
+              'target-arrow-shape': 'triangle'
+          }},
+          { selector: '.cycle', style: {
+              'line-color': '#ef4444',
+              'target-arrow-color': '#ef4444'
+          }},
+          { selector: '.danger', style: {
+              'background-color': '#ef4444'
+          }}
+        ],
+        layout: { name: 'cose', animate: true, animationDuration: 800 }
+      });
 
       async function fetchState(){
         const r = await fetch('/api/state');
@@ -279,27 +368,24 @@ HTML_TEMPLATE = """
       function addNodesEdgesFromState(state){
         clearGraph();
         const elements = [];
-        // add resource nodes
         for(const rid in state.resources){
           const r = state.resources[rid];
-          elements.push({ data: { id: 'R:'+rid, label: rid+" (A:"+r.available+"/T:"+r.total+')', type: 'resource' } });
+          elements.push({ data: { id: 'R:'+rid, label: rid+" ("+r.available+"/"+r.total+")", type: 'resource' } });
         }
         for(const pid in state.processes){
           const p = state.processes[pid];
           elements.push({ data: { id: 'P:'+pid, label: pid, type: 'process' } });
-          // allocation edges P -> R (allocated)
           for(const rid in p.allocated){
-            elements.push({ data: { id: 'alloc:'+pid+rid, source: 'P:'+pid, target: 'R:'+rid, label: 'alloc:'+p.allocated[rid] } });
+            elements.push({ data: { source: 'R:'+rid, target: 'P:'+pid, label: 'alloc:'+p.allocated[rid] } });
           }
-          // request edges P -> R (requesting)
           for(const rid in p.requesting){
             if(p.requesting[rid] > 0){
-              elements.push({ data: { id: 'req:'+pid+rid, source: 'P:'+pid, target: 'R:'+rid, label: 'req:'+p.requesting[rid] } });
+              elements.push({ data: { source: 'P:'+pid, target: 'R:'+rid, label: 'req:'+p.requesting[rid] } });
             }
           }
         }
         cy.add(elements);
-        cy.layout({ name: 'cose' }).run();
+        cy.layout({ name: 'cose', animate: true }).run();
       }
 
       async function refresh(){
@@ -313,6 +399,7 @@ HTML_TEMPLATE = """
         await fetch('/api/add_process', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({pid}) });
         await refresh();
       }
+
       async function addResource(){
         const rid = document.getElementById('rid').value || 'R'+Date.now();
         const count = parseInt(document.getElementById('count').value || '1');
@@ -326,7 +413,7 @@ HTML_TEMPLATE = """
         const cnt = parseInt(document.getElementById('count').value || '1');
         const r = await fetch('/api/request', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({pid, rid, count: cnt}) });
         const js = await r.json();
-        document.getElementById('log').innerText = JSON.stringify(js);
+        document.getElementById('log').innerText = JSON.stringify(js, null, 2);
         await refresh();
       }
 
@@ -336,27 +423,18 @@ HTML_TEMPLATE = """
         const cnt = parseInt(document.getElementById('count').value || '1');
         const r = await fetch('/api/release', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({pid, rid, count: cnt}) });
         const js = await r.json();
-        document.getElementById('log').innerText = JSON.stringify(js);
+        document.getElementById('log').innerText = JSON.stringify(js, null, 2);
         await refresh();
       }
 
       async function detect(){
         const r = await fetch('/api/detect');
         const js = await r.json();
-        document.getElementById('log').innerText = JSON.stringify(js);
-        // highlight cycles
+        document.getElementById('log').innerText = JSON.stringify(js, null, 2);
         const cycles = js.cycles || [];
-        // remove previous cycle classes
-        cy.elements().removeClass('cycle');
-        // for each cycle (list of processes), color edges between those processes via resource
-        cycles.forEach((cycle, idx) => {
-          // cycle is list of PIDs like ["P1","P2"]
-          for(let i=0;i<cycle.length;i++){
-            const a = 'P:'+cycle[i];
-            const b = 'P:'+cycle[(i+1)%cycle.length];
-            // find an edge representing waiting path P->R and R->P' not directly modeled here; we'll mark nodes
-            cy.getElementById(a).addClass('danger');
-          }
+        cy.elements().removeClass('cycle danger');
+        cycles.forEach(cycle => {
+          cycle.forEach(pid => cy.getElementById('P:'+pid).addClass('danger'));
         });
       }
 
@@ -366,11 +444,10 @@ HTML_TEMPLATE = """
         const cnt = parseInt(document.getElementById('count').value || '1');
         const r = await fetch('/api/banker_check', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({pid, rid, count: cnt}) });
         const js = await r.json();
-        document.getElementById('log').innerText = JSON.stringify(js);
+        document.getElementById('log').innerText = JSON.stringify(js, null, 2);
       }
 
       async function demoCycle(){
-        // loads a classic deadlock: P1 holds R1 wants R2; P2 holds R2 wants R1
         await fetch('/api/reset', { method: 'POST' });
         await fetch('/api/add_resource', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({rid:'R1', total:1}) });
         await fetch('/api/add_resource', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({rid:'R2', total:1}) });
@@ -378,18 +455,17 @@ HTML_TEMPLATE = """
         await fetch('/api/add_process', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({pid:'P2'}) });
         await fetch('/api/request', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({pid:'P1', rid:'R1', count:1}) });
         await fetch('/api/request', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({pid:'P2', rid:'R2', count:1}) });
-        // now P1 requests R2 (blocked), P2 requests R1 (blocked)
         await fetch('/api/request', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({pid:'P1', rid:'R2', count:1}) });
         await fetch('/api/request', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({pid:'P2', rid:'R1', count:1}) });
         await refresh();
       }
 
-      // initial refresh on load
       refresh();
     </script>
   </body>
 </html>
 """
+
 
 @app.route('/')
 def index():
